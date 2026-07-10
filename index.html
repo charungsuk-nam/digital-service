@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Digital Service Request</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+  <!-- ✅ LIFF SDK โหลดได้ปกติบน GitHub Pages เพราะไม่มี iframe ของ Apps Script -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body { background-color: #f4f7fe; font-family: 'Sarabun', sans-serif; }
+
+    .header-banner {
+      background: linear-gradient(135deg, #3f51b5 0%, #5c6bc0 100%);
+      color: white;
+      padding: 50px 20px 70px 20px;
+      border-radius: 0 0 30px 30px;
+      margin-bottom: -50px;
+      position: relative;
+      overflow: hidden;
+    }
+    .header-bg-icon {
+      position: absolute; right: 10%; top: 20px;
+      font-size: 6rem; opacity: 0.15; transform: rotate(15deg);
+    }
+    .main-card {
+      border: none; border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1); z-index: 1;
+    }
+    .form-label { font-weight: 600; color: #444; display: flex; align-items: center; }
+    .form-label i { width: 30px; font-size: 1.1rem; color: #5c6bc0; margin-right: 5px; }
+    .priority-card {
+      border: 1px solid #dee2e6; border-radius: 12px;
+      padding: 15px 5px; transition: 0.3s; background: white;
+    }
+    .priority-card i { font-size: 1.4rem; margin-bottom: 5px; }
+    .main-footer { padding: 30px 0; color: #777; font-size: 0.85rem; }
+    #windowsTerms {
+      border: 2px solid #ffc107; background-color: #fffef0;
+      border-radius: 15px; display: none;
+    }
+    .btn-check:checked + .priority-card {
+      border: 2px solid #5c6bc0 !important;
+      background-color: #f0f3ff; transform: translateY(-3px);
+    }
+
+    /* Loading overlay */
+    #loadingOverlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(63,81,181,0.95); z-index: 9999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; color: white;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay แสดงระหว่าง LIFF init -->
+<div id="loadingOverlay">
+  <div class="spinner-border text-light mb-3" style="width:3rem;height:3rem;"></div>
+  <p class="fw-bold fs-5">กำลังเชื่อมต่อ LINE...</p>
+  <small class="opacity-75" id="loadingMsg">กรุณารอสักครู่</small>
+</div>
+
+<!-- Debug Box (ซ่อนได้ภายหลัง) -->
+<div id="auto-debug-box" style="background:#111;color:#0f0;padding:12px;font-family:monospace;font-size:12px;position:fixed;top:0;left:0;width:100%;max-height:40vh;overflow-y:auto;border-bottom:3px solid #ffc107;z-index:8888;display:none;">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <h6 style="color:#fff;margin:0;font-size:13px;">📟 SYSTEM LOG</h6>
+    <button onclick="document.getElementById('auto-debug-box').style.display='none'" style="background:none;border:none;color:#fff;cursor:pointer;">✕</button>
+  </div>
+  <div id="debug-text-content">⏳ ระบบกำลังเริ่มทำงาน...</div>
+</div>
+
+<div class="header-banner text-center">
+  <i class="fas fa-file-invoice header-bg-icon"></i>
+  <h2 class="fw-bold"><i class="fas fa-laptop-medical me-2"></i>Digital Service Request</h2>
+  <p class="opacity-75">ระบบแจ้งซ่อมและขอรับบริการออนไลน์ หน่วยเทคโนโลยีสารสนเทศ</p>
+</div>
+
+<div class="container pb-5">
+  <div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+      <div class="card main-card">
+        <div class="card-body p-4 p-md-5">
+          <form id="reportForm">
+
+            <div class="mb-4">
+              <label class="form-label"><i class="fas fa-user-circle"></i> ชื่อผู้แจ้ง <span class="text-danger ms-1">*</span></label>
+              <input type="text" name="name" id="nameInput" class="form-control form-control-lg shadow-sm" style="font-size:1rem;" placeholder="ระบุชื่อ-นามสกุล" required>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label fw-bold"><i class="fas fa-building me-2"></i>หน่วยงานที่แจ้ง</label>
+              <select class="form-select shadow-sm" name="department" required>
+                <option value="" disabled selected>-- กรุณาเลือกหน่วยงาน --</option>
+                <option>หน่วยอาคารและยานพาหนะ</option>
+                <option>หน่วยห้องปฏิบัติการเพื่อการเรียนการสอนและวิจัย</option>
+                <option>หน่วยห้องสมุดและสารสนเทศทางการศึกษา</option>
+                <option>หน่วยเทคโนโลยีสารสนเทศ</option>
+                <option>หน่วยเลขานุการและธุรการ</option>
+                <option>หน่วยนโยบายและแผนและประกันคุณภาพการศึกษา</option>
+                <option>หน่วยทรัพยากรบุคคล</option>
+                <option>หน่วยประชาสัมพันธ์และภาพลักษณ์องค์กร</option>
+                <option>หน่วยรับฟังเสียงลูกค้า</option>
+                <option>หน่วยการเงิน</option>
+                <option>หน่วยพัสดุ</option>
+                <option>หน่วยบริการการศึกษา</option>
+                <option>หน่วยบัณฑิตศึกษาและการศึกษาหลังปริญญา</option>
+                <option>หน่วยกิจการนักศึกษาและศิษย์เก่าสัมพันธ์</option>
+                <option>หน่วยบริหารงานวิจัยและนวัตกรรม</option>
+                <option>หน่วยวิเทศสัมพันธ์</option>
+                <option>หน่วยบริการวิชาการ</option>
+                <option>สำนักวิชาสัตวแพทยศาสตร์</option>
+                <option>ศูนย์การเรียนรู้และส่งเสริมสุขภาพทางสัตวแพทย์ภาคเหนือ</option>
+                <option>ศูนย์เวชศาสตร์ชันสูตรและนวัตกรรมด้านสุขภาพสัตว์</option>
+                <option>ศูนย์สุขภาพช้างและสัตว์ป่า</option>
+                <option>โรงพยาบาลสัตว์ใหญ่และปศุสัตว์</option>
+                <option>ศูนย์ดูแลสัตว์เลี้ยง</option>
+                <option>ศูนย์ฝึกสัตวแพทย์และฟาร์มทดลอง</option>
+                <option>ศูนย์ความเป็นเลิศเวชศาสตร์แมว</option>
+                <option>ศูนย์เฝ้าระวังสุขภาพหนึ่งเดียว</option>
+                <option>ศูนย์สัตวแพทย์สาธารณสุขและอาหารปลอดภัยเอเชียแปซิฟิก</option>
+              </select>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label"><i class="fas fa-list-ul"></i> ประเภทปัญหา <span class="text-danger ms-1">*</span></label>
+              <select name="issue" id="issueType" class="form-select form-select-lg shadow-sm" style="font-size:1rem;" required onchange="checkWindowsIssue(this.value)">
+                <option value="">-- เลือกประเภทปัญหา --</option>
+                <option value="ปัญหาอินเทอร์เน็ต">🌐 ปัญหาอินเทอร์เน็ต (Wi-Fi, LAN, สัญญาณช้า)</option>
+                <option value="ซ่อมบำรุงอุปกรณ์">💻 ซ่อมบำรุงอุปกรณ์ (คอมพิวเตอร์, จอ, เมาส์/คีย์บอร์ด)</option>
+                <option value="ระบบซอฟต์แวร์">🖥️ ซอฟต์แวร์/แอปพลิเคชัน (โปรแกรมค้าง, ติดตั้งโปรแกรม)</option>
+                <option value="อุปกรณ์ต่อพ่วง">🖨️ อุปกรณ์ต่อพ่วง (เครื่องพิมพ์, สแกนเนอร์)</option>
+                <option value="ติดตั้ง Windows ใหม่">💽 ติดตั้ง Windows ใหม่ / ล้างเครื่อง</option>
+              </select>
+            </div>
+
+            <div id="windowsTerms" class="p-3 mb-4 shadow-sm">
+              <h6 class="text-danger fw-bold mb-2"><i class="fas fa-exclamation-triangle"></i> เงื่อนไขกรณีลงโปรแกรมใหม่ / Windows</h6>
+              <a href="https://docs.google.com/document/d/1Is7tTSwLHj9gybEyPd879Vz9YyRm7o7ovLq2EZE23hg/edit?usp=sharing"
+                 target="_blank" class="btn btn-sm btn-outline-info w-100 mb-3 fw-bold">
+                <i class="fas fa-external-link-alt me-1"></i> คลิกเปิดอ่านเงื่อนไขการสำรองข้อมูล
+              </a>
+              <div class="form-check">
+                <input class="form-check-input border-danger" type="checkbox" id="backupConfirm" name="consent">
+                <label class="form-check-label small fw-bold text-danger" for="backupConfirm">
+                  ข้าพเจ้ายินยอมตามเงื่อนไข และยืนยันว่าได้สำรองข้อมูล (Backup) เรียบร้อยแล้ว
+                </label>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label"><i class="fas fa-exclamation-triangle"></i> ระดับความเร่งด่วน <span class="text-danger ms-1">*</span></label>
+              <div class="row g-2">
+                <div class="col-4">
+                  <label class="w-100 h-100">
+                    <input type="radio" name="priority" value="ปกติ" class="btn-check" checked>
+                    <div class="priority-card text-center h-100 d-flex flex-column align-items-center justify-content-center border">
+                      <i class="fas fa-check-circle text-success"></i>
+                      <div class="small fw-bold">ปกติ</div>
+                    </div>
+                  </label>
+                </div>
+                <div class="col-4">
+                  <label class="w-100 h-100">
+                    <input type="radio" name="priority" value="ด่วน" class="btn-check">
+                    <div class="priority-card text-center h-100 d-flex flex-column align-items-center justify-content-center border">
+                      <i class="fas fa-exclamation-circle text-warning"></i>
+                      <div class="small fw-bold">ด่วน</div>
+                    </div>
+                  </label>
+                </div>
+                <div class="col-4">
+                  <label class="w-100 h-100">
+                    <input type="radio" name="priority" value="ด่วนมาก" class="btn-check">
+                    <div class="priority-card text-center h-100 d-flex flex-column align-items-center justify-content-center border">
+                      <i class="fas fa-fire text-danger"></i>
+                      <div class="small fw-bold">ด่วนมาก</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label">
+                <i class="fas fa-map-marker-alt"></i> สถานที่และรายละเอียดปัญหา <span class="text-danger ms-1">*</span>
+              </label>
+              <textarea name="details" class="form-control shadow-sm" rows="3" required></textarea>
+              <div class="form-text mt-2" style="font-size:0.85rem;color:#666;">
+                <span class="text-danger">*</span> โปรดระบุ ชื่ออาคาร ชั้น ห้อง หรืออาการที่พบ
+              </div>
+            </div>
+
+            <div class="row g-2 mt-4">
+              <div class="col-12">
+                <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-3 shadow" style="border-radius:12px;font-weight:600;">
+                  <i class="fas fa-paper-plane me-2"></i>ส่งคำขอรับบริการ / Submit Service Request
+                </button>
+              </div>
+              <div class="col-12 text-center">
+                <a href="https://script.google.com/macros/s/AKfycbzN4P_XoL886K02oVdlVO7F3uwo5KCjRE-H4tyzxeQJU9hnuY-t5X2S-yP50klO0dCSdw/exec?p=check"
+                   style="text-decoration:none;">
+                  <i class="fas fa-search"></i> ตรวจสอบสถานะงานของคุณ
+                </a>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="main-footer text-center">
+  <div class="container">
+    <p class="mb-1 fw-bold text-dark">ออกแบบและพัฒนาโดย หน่วยเทคโนโลยีสารสนเทศ</p>
+    <p class="mb-0">คณะสัตวแพทยศาสตร์ มหาวิทยาลัยเชียงใหม่</p>
+  </div>
+</footer>
+
+<script>
+// ==========================================
+// CONFIG — แก้ 2 ค่านี้เท่านั้น
+// ==========================================
+const LIFF_ID      = "2010434883-6GDwMsdw";
+// Apps Script Web App URL (backend) — ใส่ URL ของคุณตรงนี้
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzN4P_XoL886K02oVdlVO7F3uwo5KCjRE-H4tyzxeQJU9hnuY-t5X2S-yP50klO0dCSdw/exec";
+
+// ==========================================
+// ตัวแปร global เก็บข้อมูล LINE Profile
+// ==========================================
+let lineUserId      = "";
+let lineDisplayName = "";
+
+// ==========================================
+// DEBUG LOG
+// ==========================================
+function logToScreen(msg, isError = false) {
+  const box = document.getElementById('auto-debug-box');
+  const out = document.getElementById('debug-text-content');
+  if (box) box.style.display = 'block';
+  if (out) {
+    const color = isError ? '#ff4d4d' : '#00ff00';
+    const time  = new Date().toLocaleTimeString();
+    out.innerHTML += `<br><span style="color:${color}">[${time}] 🔹 ${msg}</span>`;
+    out.parentElement.scrollTop = out.parentElement.scrollHeight;
+  }
+}
+
+function setLoadingMsg(msg) {
+  const el = document.getElementById('loadingMsg');
+  if (el) el.textContent = msg;
+}
+
+function hideLoading() {
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+// ==========================================
+// LIFF INIT — ทำงานได้ 100% บน GitHub Pages
+// เพราะไม่มี iframe ของ Apps Script มาขัด
+// ==========================================
+document.addEventListener("DOMContentLoaded", function() {
+  logToScreen("DOM Loaded — กำลัง init LIFF...");
+  setLoadingMsg("กำลังเชื่อมต่อ LINE SDK...");
+
+  liff.init({ liffId: LIFF_ID })
+    .then(() => {
+      logToScreen("✅ liff.init() สำเร็จ!");
+      logToScreen("อยู่ใน LINE app: " + liff.isInClient());
+      logToScreen("ล็อกอินแล้ว: "    + liff.isLoggedIn());
+
+      if (!liff.isLoggedIn()) {
+        logToScreen("⚠️ ยังไม่ล็อกอิน — redirect ไป LINE Login...");
+        setLoadingMsg("กำลังพาไปหน้า LINE Login...");
+        liff.login({ redirectUri: window.location.href });
+        return;
+      }
+
+      setLoadingMsg("กำลังดึงข้อมูลโปรไฟล์...");
+      return liff.getProfile();
+    })
+    .then((profile) => {
+      if (!profile) return;
+
+      lineUserId      = profile.userId;
+      lineDisplayName = profile.displayName;
+
+      logToScreen("🎉 ได้โปรไฟล์แล้ว! ชื่อ: " + lineDisplayName + " | ID: " + lineUserId);
+
+      // autofill ชื่อ LINE ลงในช่องผู้แจ้ง
+      const nameInput = document.getElementById('nameInput');
+      if (nameInput) nameInput.value = lineDisplayName;
+
+      // ซ่อน loading แสดงฟอร์ม
+      hideLoading();
+    })
+    .catch((err) => {
+      logToScreen("❌ LIFF Error: " + err.toString(), true);
+      // ถ้า error ให้แสดงฟอร์มก็ได้ ผู้ใช้ยังกรอกได้ แค่ไม่มี userId
+      hideLoading();
+    });
+
+  // ผูก submit event
+  document.getElementById('reportForm').addEventListener('submit', handleFormSubmit);
+});
+
+// ==========================================
+// SUBMIT FORM — ส่งข้อมูลไป Apps Script ผ่าน fetch()
+// แทน google.script.run ที่ใช้ได้เฉพาะใน Apps Script HTML Service
+// ==========================================
+async function handleFormSubmit(event) {
+  event.preventDefault();
+  logToScreen("📩 เริ่มส่งข้อมูลแจ้งซ่อม...");
+
+  const form      = event.target;
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled  = true;
+  submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>กำลังส่งข้อมูล...';
+
+  const formData = {
+    name:            form.querySelector('[name="name"]').value,
+    department:      form.querySelector('[name="department"]').value,
+    issue:           form.querySelector('[name="issue"]').value,
+    priority:        form.querySelector('input[name="priority"]:checked').value,
+    details:         form.querySelector('[name="details"]').value,
+    consent:         form.querySelector('[name="consent"]') ? form.querySelector('[name="consent"]').checked : false,
+    lineUserId:      lineUserId,       // ✅ ได้จาก liff.getProfile() จริงๆ
+    lineDisplayName: lineDisplayName   // ✅ ได้จาก liff.getProfile() จริงๆ
+  };
+
+  logToScreen("📦 lineUserId=" + (lineUserId || "❌ ว่าง"));
+
+  try {
+    // ส่งแบบ no-cors ไป Apps Script (Apps Script รองรับ GET parameter)
+    // เนื่องจาก Apps Script ไม่รองรับ CORS POST จาก origin อื่น
+    // ใช้วิธีส่งผ่าน URL parameter แทน
+    const params  = new URLSearchParams({ action: "processForm", data: JSON.stringify(formData) });
+    const res     = await fetch(APPS_SCRIPT_URL + "?" + params.toString(), {
+      method: "GET",
+      redirect: "follow"
+    });
+    const result  = await res.json();
+
+    logToScreen("✅ บันทึกสำเร็จ! Case ID: " + result.caseId
+              + " | userId บันทึก: " + (result.savedUserId || "(ไม่มี)"));
+
+    await Swal.fire({
+      icon: 'success',
+      title: 'ส่งคำขอสำเร็จ!',
+      html: 'หมายเลขคำขอของคุณคือ <b>' + result.caseId + '</b>',
+      confirmButtonText: 'ตกลง'
+    });
+
+    form.reset();
+    if (document.getElementById('nameInput')) {
+      document.getElementById('nameInput').value = lineDisplayName;
+    }
+
+  } catch (err) {
+    logToScreen("❌ ส่งข้อมูลล้มเหลว: " + err.toString(), true);
+    Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถส่งข้อมูลได้ กรุณาลองใหม่อีกครั้ง', 'error');
+  }
+
+  submitBtn.disabled  = false;
+  submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>ส่งคำขอรับบริการ / Submit Service Request';
+}
+
+// ==========================================
+// HELPER: แสดง/ซ่อนเงื่อนไข Windows
+// ==========================================
+function checkWindowsIssue(val) {
+  const box = document.getElementById('windowsTerms');
+  if (box) box.style.display = val === 'ติดตั้ง Windows ใหม่' ? 'block' : 'none';
+}
+</script>
+</body>
+</html>
