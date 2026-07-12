@@ -65,14 +65,7 @@
   <small class="opacity-75" id="loadingMsg">กรุณารอสักครู่</small>
 </div>
 
-<!-- Debug Box (ซ่อนได้ภายหลัง) -->
-<div id="auto-debug-box" style="background:#111;color:#0f0;padding:12px;font-family:monospace;font-size:12px;position:fixed;top:0;left:0;width:100%;max-height:40vh;overflow-y:auto;border-bottom:3px solid #ffc107;z-index:8888;display:none;">
-  <div style="display:flex;justify-content:space-between;align-items:center;">
-    <h6 style="color:#fff;margin:0;font-size:13px;">📟 SYSTEM LOG</h6>
-    <button onclick="document.getElementById('auto-debug-box').style.display='none'" style="background:none;border:none;color:#fff;cursor:pointer;">✕</button>
-  </div>
-  <div id="debug-text-content">⏳ ระบบกำลังเริ่มทำงาน...</div>
-</div>
+  <!-- ลบ Debug Box ออกแล้ว — ระบบ stable ใช้งาน production -->
 
 <div class="header-banner text-center">
   <i class="fas fa-file-invoice header-bg-icon"></i>
@@ -87,9 +80,36 @@
         <div class="card-body p-4 p-md-5">
           <form id="reportForm">
 
+            <!-- ชื่อ-นามสกุล: Searchable Dropdown จาก Sheet Staff -->
             <div class="mb-4">
-              <label class="form-label"><i class="fas fa-user-circle"></i> ชื่อผู้แจ้ง <span class="text-danger ms-1">*</span></label>
-              <input type="text" name="name" id="nameInput" class="form-control form-control-lg shadow-sm" style="font-size:1rem;" placeholder="ระบุชื่อ-นามสกุล" required>
+              <label class="form-label">
+                <i class="fas fa-user-circle"></i> ชื่อ-นามสกุล <span class="text-danger ms-1">*</span>
+              </label>
+
+              <!-- ช่องค้นหา -->
+              <div class="position-relative">
+                <input type="text" id="staffSearch"
+                  class="form-control form-control-lg shadow-sm"
+                  placeholder="🔍 พิมพ์ชื่อเพื่อค้นหา..."
+                  autocomplete="off"
+                  required>
+                <!-- Dropdown list -->
+                <div id="staffDropdown"
+                  style="display:none; position:absolute; z-index:1000; width:100%;
+                         max-height:220px; overflow-y:auto; background:white;
+                         border:1px solid #dee2e6; border-top:none;
+                         border-radius:0 0 12px 12px;
+                         box-shadow:0 8px 20px rgba(0,0,0,0.12);">
+                </div>
+              </div>
+
+              <!-- Hidden input เก็บชื่อจริงที่เลือก -->
+              <input type="hidden" id="selectedName" name="name" required>
+
+              <div class="form-text mt-1" style="font-size:0.82rem; color:#888;">
+                <i class="fas fa-info-circle me-1"></i>
+                พิมพ์ชื่อหรือนามสกุล แล้วเลือกจากรายการ
+              </div>
             </div>
 
             <div class="mb-4">
@@ -224,33 +244,200 @@
 
 <script>
 // ==========================================
-// CONFIG — แก้ 2 ค่านี้เท่านั้น
+// CONFIG
 // ==========================================
-const LIFF_ID      = "2010434883-6GDwMsdw";
-// Apps Script Web App URL (backend) — ใส่ URL ของคุณตรงนี้
+const LIFF_ID         = "2010434883-6GDwMsdw";
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzN4P_XoL886K02oVdlVO7F3uwo5KCjRE-H4tyzxeQJU9hnuY-t5X2S-yP50klO0dCSdw/exec";
 
-// ==========================================
-// ตัวแปร global เก็บข้อมูล LINE Profile
-// ==========================================
 let lineUserId      = "";
 let lineDisplayName = "";
+let staffList       = []; // รายชื่อบุคลากรจาก Sheet Staff
 
 // ==========================================
-// DEBUG LOG
+// โหลดรายชื่อบุคลากรจาก Apps Script
 // ==========================================
-function logToScreen(msg, isError = false) {
-  const box = document.getElementById('auto-debug-box');
-  const out = document.getElementById('debug-text-content');
-  if (box) box.style.display = 'block';
-  if (out) {
-    const color = isError ? '#ff4d4d' : '#00ff00';
-    const time  = new Date().toLocaleTimeString();
-    out.innerHTML += `<br><span style="color:${color}">[${time}] 🔹 ${msg}</span>`;
-    out.parentElement.scrollTop = out.parentElement.scrollHeight;
+async function loadStaffList() {
+  try {
+    const res    = await fetch(APPS_SCRIPT_URL + "?action=getStaff", { redirect: "follow" });
+    const result = await res.json();
+    if (result.status === "success") {
+      staffList = result.data;
+    }
+  } catch (err) {
+    console.error("loadStaffList error:", err);
   }
 }
 
+// ==========================================
+// Searchable Dropdown Logic
+// ==========================================
+function initStaffDropdown() {
+  const searchInput = document.getElementById('staffSearch');
+  const dropdown    = document.getElementById('staffDropdown');
+  const hiddenInput = document.getElementById('selectedName');
+
+  // พิมพ์ค้นหา → กรองรายชื่อ
+  searchInput.addEventListener('input', function() {
+    const keyword = this.value.trim();
+    hiddenInput.value = ""; // ล้างค่าที่เลือกไว้ก่อนหน้า
+
+    if (keyword.length < 1) {
+      dropdown.style.display = 'none';
+      return;
+    }
+
+    // กรองชื่อที่ตรงกับ keyword
+    const filtered = staffList.filter(s =>
+      s.name.includes(keyword)
+    ).slice(0, 20); // แสดงสูงสุด 20 รายการ
+
+    if (filtered.length === 0) {
+      dropdown.innerHTML = `
+        <div style="padding:12px 16px; color:#999; font-size:0.9rem;">
+          ไม่พบชื่อที่ค้นหา
+        </div>`;
+      dropdown.style.display = 'block';
+      return;
+    }
+
+    // สร้าง list items
+    dropdown.innerHTML = filtered.map(s => `
+      <div class="staff-item"
+        style="padding:10px 16px; cursor:pointer; border-bottom:1px solid #f0f0f0;
+               font-size:0.95rem; transition:background 0.15s;"
+        onmouseover="this.style.background='#f0f3ff'"
+        onmouseout="this.style.background='white'"
+        onclick="selectStaff('${s.name.replace(/'/g, "\\'")}', '${s.department.replace(/'/g, "\\'")}')">
+        <div class="fw-bold" style="color:#333;">${s.name}</div>
+        <div style="font-size:0.8rem; color:#888;">${s.department || ''}</div>
+      </div>
+    `).join('');
+
+    dropdown.style.display = 'block';
+  });
+
+  // ปิด dropdown เมื่อคลิกที่อื่น
+  document.addEventListener('click', function(e) {
+    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
+}
+
+// เลือกชื่อจาก dropdown
+function selectStaff(name, department) {
+  const searchInput  = document.getElementById('staffSearch');
+  const hiddenInput  = document.getElementById('selectedName');
+  const dropdown     = document.getElementById('staffDropdown');
+  const deptSelect   = document.querySelector('[name="department"]');
+
+  searchInput.value = name;
+  hiddenInput.value = name;
+  dropdown.style.display = 'none';
+
+  // autofill หน่วยงาน ถ้าตรงกับ option ที่มี
+  if (deptSelect && department) {
+    const options = Array.from(deptSelect.options);
+    const matched = options.find(o => o.value === department || o.text === department);
+    if (matched) deptSelect.value = matched.value;
+  }
+}
+
+// ==========================================
+// LIFF INIT
+// ==========================================
+document.addEventListener("DOMContentLoaded", async function() {
+  setLoadingMsg("กำลังโหลดรายชื่อบุคลากร...");
+
+  // โหลด Staff List ก่อน (ทำงานคู่ขนานกับ LIFF init)
+  await loadStaffList();
+  initStaffDropdown();
+
+  setLoadingMsg("กำลังเชื่อมต่อ LINE...");
+
+  liff.init({ liffId: LIFF_ID })
+    .then(() => {
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: window.location.href });
+        return;
+      }
+      return liff.getProfile();
+    })
+    .then((profile) => {
+      if (!profile) return;
+      lineUserId      = profile.userId;
+      lineDisplayName = profile.displayName;
+
+      // ถ้าชื่อ LINE ตรงกับรายชื่อใน Staff → autofill ทันที
+      const matched = staffList.find(s => s.name === lineDisplayName);
+      if (matched) {
+        selectStaff(matched.name, matched.department);
+      }
+
+      hideLoading();
+    })
+    .catch(() => hideLoading());
+
+  document.getElementById('reportForm').addEventListener('submit', handleFormSubmit);
+});
+
+// ==========================================
+// SUBMIT FORM
+// ==========================================
+async function handleFormSubmit(event) {
+  event.preventDefault();
+
+  // ตรวจสอบว่าเลือกชื่อจาก dropdown แล้ว
+  const selectedName = document.getElementById('selectedName').value;
+  if (!selectedName) {
+    Swal.fire('กรุณาเลือกชื่อ', 'กรุณาพิมพ์และเลือกชื่อ-นามสกุลจากรายการ', 'warning');
+    document.getElementById('staffSearch').focus();
+    return;
+  }
+
+  const form      = event.target;
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled  = true;
+  submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>กำลังส่งข้อมูล...';
+
+  const formData = {
+    name:            selectedName,
+    department:      form.querySelector('[name="department"]').value,
+    issue:           form.querySelector('[name="issue"]').value,
+    priority:        form.querySelector('input[name="priority"]:checked').value,
+    details:         form.querySelector('[name="details"]').value,
+    consent:         form.querySelector('[name="consent"]') ? form.querySelector('[name="consent"]').checked : false,
+    lineUserId:      lineUserId,
+    lineDisplayName: lineDisplayName
+  };
+
+  try {
+    const params = new URLSearchParams({ action: "processForm", data: JSON.stringify(formData) });
+    const res    = await fetch(APPS_SCRIPT_URL + "?" + params.toString(), { redirect: "follow" });
+    const result = await res.json();
+
+    await Swal.fire({
+      icon: 'success',
+      title: 'ส่งคำขอสำเร็จ!',
+      html: 'หมายเลขคำขอของคุณคือ <b>' + result.caseId + '</b>',
+      confirmButtonText: 'ตกลง'
+    });
+
+    form.reset();
+    document.getElementById('staffSearch').value  = "";
+    document.getElementById('selectedName').value = "";
+
+  } catch (err) {
+    Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถส่งข้อมูลได้ กรุณาลองใหม่อีกครั้ง', 'error');
+  }
+
+  submitBtn.disabled  = false;
+  submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>ส่งคำขอรับบริการ / Submit Service Request';
+}
+
+// ==========================================
+// HELPERS
+// ==========================================
 function setLoadingMsg(msg) {
   const el = document.getElementById('loadingMsg');
   if (el) el.textContent = msg;
@@ -261,119 +448,6 @@ function hideLoading() {
   if (overlay) overlay.style.display = 'none';
 }
 
-// ==========================================
-// LIFF INIT — ทำงานได้ 100% บน GitHub Pages
-// เพราะไม่มี iframe ของ Apps Script มาขัด
-// ==========================================
-document.addEventListener("DOMContentLoaded", function() {
-  logToScreen("DOM Loaded — กำลัง init LIFF...");
-  setLoadingMsg("กำลังเชื่อมต่อ LINE SDK...");
-
-  liff.init({ liffId: LIFF_ID })
-    .then(() => {
-      logToScreen("✅ liff.init() สำเร็จ!");
-      logToScreen("อยู่ใน LINE app: " + liff.isInClient());
-      logToScreen("ล็อกอินแล้ว: "    + liff.isLoggedIn());
-
-      if (!liff.isLoggedIn()) {
-        logToScreen("⚠️ ยังไม่ล็อกอิน — redirect ไป LINE Login...");
-        setLoadingMsg("กำลังพาไปหน้า LINE Login...");
-        liff.login({ redirectUri: window.location.href });
-        return;
-      }
-
-      setLoadingMsg("กำลังดึงข้อมูลโปรไฟล์...");
-      return liff.getProfile();
-    })
-    .then((profile) => {
-      if (!profile) return;
-
-      lineUserId      = profile.userId;
-      lineDisplayName = profile.displayName;
-
-      logToScreen("🎉 ได้โปรไฟล์แล้ว! ชื่อ: " + lineDisplayName + " | ID: " + lineUserId);
-
-      // autofill ชื่อ LINE ลงในช่องผู้แจ้ง
-      const nameInput = document.getElementById('nameInput');
-      if (nameInput) nameInput.value = lineDisplayName;
-
-      // ซ่อน loading แสดงฟอร์ม
-      hideLoading();
-    })
-    .catch((err) => {
-      logToScreen("❌ LIFF Error: " + err.toString(), true);
-      // ถ้า error ให้แสดงฟอร์มก็ได้ ผู้ใช้ยังกรอกได้ แค่ไม่มี userId
-      hideLoading();
-    });
-
-  // ผูก submit event
-  document.getElementById('reportForm').addEventListener('submit', handleFormSubmit);
-});
-
-// ==========================================
-// SUBMIT FORM — ส่งข้อมูลไป Apps Script ผ่าน fetch()
-// แทน google.script.run ที่ใช้ได้เฉพาะใน Apps Script HTML Service
-// ==========================================
-async function handleFormSubmit(event) {
-  event.preventDefault();
-  logToScreen("📩 เริ่มส่งข้อมูลแจ้งซ่อม...");
-
-  const form      = event.target;
-  const submitBtn = document.getElementById('submitBtn');
-  submitBtn.disabled  = true;
-  submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>กำลังส่งข้อมูล...';
-
-  const formData = {
-    name:            form.querySelector('[name="name"]').value,
-    department:      form.querySelector('[name="department"]').value,
-    issue:           form.querySelector('[name="issue"]').value,
-    priority:        form.querySelector('input[name="priority"]:checked').value,
-    details:         form.querySelector('[name="details"]').value,
-    consent:         form.querySelector('[name="consent"]') ? form.querySelector('[name="consent"]').checked : false,
-    lineUserId:      lineUserId,       // ✅ ได้จาก liff.getProfile() จริงๆ
-    lineDisplayName: lineDisplayName   // ✅ ได้จาก liff.getProfile() จริงๆ
-  };
-
-  logToScreen("📦 lineUserId=" + (lineUserId || "❌ ว่าง"));
-
-  try {
-    // ส่งแบบ no-cors ไป Apps Script (Apps Script รองรับ GET parameter)
-    // เนื่องจาก Apps Script ไม่รองรับ CORS POST จาก origin อื่น
-    // ใช้วิธีส่งผ่าน URL parameter แทน
-    const params  = new URLSearchParams({ action: "processForm", data: JSON.stringify(formData) });
-    const res     = await fetch(APPS_SCRIPT_URL + "?" + params.toString(), {
-      method: "GET",
-      redirect: "follow"
-    });
-    const result  = await res.json();
-
-    logToScreen("✅ บันทึกสำเร็จ! Case ID: " + result.caseId
-              + " | userId บันทึก: " + (result.savedUserId || "(ไม่มี)"));
-
-    await Swal.fire({
-      icon: 'success',
-      title: 'ส่งคำขอสำเร็จ!',
-      html: 'หมายเลขคำขอของคุณคือ <b>' + result.caseId + '</b>',
-      confirmButtonText: 'ตกลง'
-    });
-
-    form.reset();
-    if (document.getElementById('nameInput')) {
-      document.getElementById('nameInput').value = lineDisplayName;
-    }
-
-  } catch (err) {
-    logToScreen("❌ ส่งข้อมูลล้มเหลว: " + err.toString(), true);
-    Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถส่งข้อมูลได้ กรุณาลองใหม่อีกครั้ง', 'error');
-  }
-
-  submitBtn.disabled  = false;
-  submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>ส่งคำขอรับบริการ / Submit Service Request';
-}
-
-// ==========================================
-// HELPER: แสดง/ซ่อนเงื่อนไข Windows
-// ==========================================
 function checkWindowsIssue(val) {
   const box = document.getElementById('windowsTerms');
   if (box) box.style.display = val === 'ติดตั้ง Windows ใหม่' ? 'block' : 'none';
