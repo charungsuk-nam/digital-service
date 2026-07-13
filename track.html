@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ติดตามสถานะงาน — IT Service</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      background: #f0f2f5;
+      font-family: 'Sarabun', sans-serif;
+      padding-bottom: 40px;
+    }
+
+    /* Header */
+    .header-banner {
+      background: linear-gradient(135deg, #1a237e 0%, #3949ab 100%);
+      color: white;
+      padding: 40px 20px 70px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .header-banner::before {
+      content: '\f017';
+      font-family: 'Font Awesome 6 Free';
+      font-weight: 900;
+      position: absolute;
+      right: 8%;
+      top: 15px;
+      font-size: 7rem;
+      opacity: 0.08;
+    }
+
+    /* Loading overlay */
+    #loadingOverlay {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(26,35,126,0.95);
+      z-index: 9999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: white;
+    }
+
+    /* Summary badges */
+    .summary-wrap {
+      margin-top: -40px;
+      padding: 0 16px;
+      position: relative;
+      z-index: 10;
+    }
+    .summary-card {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    }
+    .badge-count {
+      border-radius: 12px;
+      padding: 10px 8px;
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    /* Timeline */
+    .timeline-wrap { padding: 16px; }
+
+    .timeline-item {
+      position: relative;
+      padding-left: 52px;
+      margin-bottom: 20px;
+    }
+
+    /* เส้นแนวตั้ง */
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: 20px;
+      top: 40px;
+      bottom: -20px;
+      width: 2px;
+      background: #e0e0e0;
+    }
+    .timeline-item:last-child::before { display: none; }
+
+    /* ไอคอนวงกลม */
+    .timeline-dot {
+      position: absolute;
+      left: 8px;
+      top: 12px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      color: white;
+      z-index: 1;
+    }
+
+    /* Card งาน */
+    .job-card {
+      background: white;
+      border-radius: 14px;
+      padding: 14px 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      border-left: 5px solid #ccc;
+    }
+    .job-card.pending   { border-left-color: #ff9800; }
+    .job-card.process   { border-left-color: #2196f3; }
+    .job-card.waiting   { border-left-color: #9c27b0; }
+    .job-card.outsource { border-left-color: #ff5722; }
+    .job-card.success   { border-left-color: #4caf50; }
+
+    /* สถานะ badge */
+    .status-pill {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 50px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: white;
+    }
+    .pill-pending   { background: #ff9800; }
+    .pill-process   { background: #2196f3; }
+    .pill-waiting   { background: #9c27b0; }
+    .pill-outsource { background: #ff5722; }
+    .pill-success   { background: #4caf50; }
+
+    /* Progress steps */
+    .progress-steps {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+      gap: 4px;
+    }
+    .step {
+      flex: 1;
+      height: 4px;
+      border-radius: 4px;
+      background: #e0e0e0;
+    }
+    .step.done { background: #4caf50; }
+    .step.active { background: #2196f3; }
+    .step-label {
+      font-size: 0.65rem;
+      color: #999;
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #aaa;
+    }
+    .empty-state i { font-size: 4rem; margin-bottom: 16px; opacity: 0.3; }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loadingOverlay">
+  <div class="spinner-border text-light mb-3" style="width:3rem;height:3rem;"></div>
+  <p class="fw-bold fs-5 mb-1">กำลังโหลดข้อมูลงาน...</p>
+  <small class="opacity-75" id="loadingMsg">กรุณารอสักครู่</small>
+</div>
+
+<!-- Header -->
+<div class="header-banner">
+  <h2 class="fw-bold mb-1">
+    <i class="fas fa-clipboard-list me-2"></i>สถานะงานของฉัน
+  </h2>
+  <p class="opacity-75 mb-0 small">ติดตามความคืบหน้างานแจ้งซ่อมทั้งหมด</p>
+</div>
+
+<!-- Summary -->
+<div class="summary-wrap">
+  <div class="summary-card">
+    <div class="row g-2 text-center" id="summaryRow">
+      <div class="col-3">
+        <div class="badge-count" style="background:#fff3e0; color:#e65100;">
+          <div class="fw-bold fs-5" id="cnt-pending">0</div>
+          <div>รอดำเนินการ</div>
+        </div>
+      </div>
+      <div class="col-3">
+        <div class="badge-count" style="background:#e3f2fd; color:#1565c0;">
+          <div class="fw-bold fs-5" id="cnt-process">0</div>
+          <div>กำลังแก้ไข</div>
+        </div>
+      </div>
+      <div class="col-3">
+        <div class="badge-count" style="background:#f3e5f5; color:#6a1b9a;">
+          <div class="fw-bold fs-5" id="cnt-waiting">0</div>
+          <div>รออะไหล่</div>
+        </div>
+      </div>
+      <div class="col-3">
+        <div class="badge-count" style="background:#e8f5e9; color:#2e7d32;">
+          <div class="fw-bold fs-5" id="cnt-success">0</div>
+          <div>เสร็จสิ้น</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Timeline -->
+<div class="timeline-wrap mt-3" id="timelineArea">
+  <!-- render ด้วย JS -->
+</div>
+
+<script>
+const LIFF_ID         = "2010434883-6GDwMsdw";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzN4P_XoL886K02oVdlVO7F3uwo5KCjRE-H4tyzxeQJU9hnuY-t5X2S-yP50klO0dCSdw/exec";
+
+// config สถานะ
+const STATUS_CONFIG = {
+  "รอดำเนินการ":           { cls: "pending",   pill: "pill-pending",   icon: "fa-clock",          step: 1 },
+  "กำลังแก้ไข":            { cls: "process",   pill: "pill-process",   icon: "fa-screwdriver-wrench", step: 2 },
+  "รออะไหล่/ใบเสนอราคา":  { cls: "waiting",   pill: "pill-waiting",   icon: "fa-box-open",       step: 2 },
+  "ส่งซ่อมภายนอก":         { cls: "outsource", pill: "pill-outsource", icon: "fa-truck",          step: 2 },
+  "เสร็จสิ้น":             { cls: "success",   pill: "pill-success",   icon: "fa-circle-check",   step: 3 }
+};
+
+const STEP_LABELS = ["รับเรื่อง", "ดำเนินการ", "เสร็จสิ้น"];
+
+function setLoadingMsg(msg) {
+  const el = document.getElementById('loadingMsg');
+  if (el) el.textContent = msg;
+}
+
+function hideLoading() {
+  const el = document.getElementById('loadingOverlay');
+  if (el) el.style.display = 'none';
+}
+
+// ==========================================
+// LIFF Init → ดึงงานของ userId นี้
+// ==========================================
+document.addEventListener("DOMContentLoaded", async function() {
+  try {
+    setLoadingMsg("กำลังเชื่อมต่อ LINE...");
+    await liff.init({ liffId: LIFF_ID });
+
+    if (!liff.isLoggedIn()) {
+      liff.login({ redirectUri: window.location.href });
+      return;
+    }
+
+    setLoadingMsg("กำลังดึงข้อมูลโปรไฟล์...");
+    const profile = await liff.getProfile();
+    const userId  = profile.userId;
+    const name    = profile.displayName;
+
+    // อัปเดต header ใส่ชื่อ
+    document.querySelector('.header-banner p').textContent =
+      "สวัสดี คุณ " + name + " — ข้อมูลงานแจ้งซ่อมทั้งหมด";
+
+    setLoadingMsg("กำลังโหลดข้อมูลงาน...");
+    await loadMyJobs(userId);
+
+  } catch (err) {
+    console.error(err);
+    hideLoading();
+    renderError("ไม่สามารถเชื่อมต่อได้ กรุณาลองใหม่อีกครั้ง");
+  }
+});
+
+// ==========================================
+// โหลดงานของ userId จาก Apps Script
+// ==========================================
+async function loadMyJobs(userId) {
+  try {
+    const params = new URLSearchParams({ action: "getMyJobs", userId: userId });
+    const res    = await fetch(APPS_SCRIPT_URL + "?" + params.toString(), { redirect: "follow" });
+    const result = await res.json();
+
+    hideLoading();
+
+    if (result.status !== "success" || result.data.length === 0) {
+      renderEmpty();
+      return;
+    }
+
+    renderSummary(result.data);
+    renderTimeline(result.data);
+
+  } catch (err) {
+    hideLoading();
+    renderError("โหลดข้อมูลไม่สำเร็จ: " + err.toString());
+  }
+}
+
+// ==========================================
+// render Summary badges
+// ==========================================
+function renderSummary(jobs) {
+  const counts = { pending: 0, process: 0, waiting: 0, success: 0 };
+
+  jobs.forEach(job => {
+    const s = job.status;
+    if (s === "รอดำเนินการ")                         counts.pending++;
+    else if (s === "กำลังแก้ไข")                     counts.process++;
+    else if (s === "รออะไหล่/ใบเสนอราคา"
+          || s === "ส่งซ่อมภายนอก")                  counts.waiting++;
+    else if (s === "เสร็จสิ้น")                       counts.success++;
+  });
+
+  document.getElementById('cnt-pending').textContent = counts.pending;
+  document.getElementById('cnt-process').textContent = counts.process;
+  document.getElementById('cnt-waiting').textContent = counts.waiting;
+  document.getElementById('cnt-success').textContent = counts.success;
+}
+
+// ==========================================
+// render Timeline
+// ==========================================
+function renderTimeline(jobs) {
+  // เรียงใหม่ล่าสุดก่อน
+  jobs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  const area = document.getElementById('timelineArea');
+  area.innerHTML = '<p class="text-muted small px-2 mb-2">เรียงจากล่าสุด — ทั้งหมด ' + jobs.length + ' รายการ</p>';
+
+  jobs.forEach(job => {
+    const cfg     = STATUS_CONFIG[job.status] || STATUS_CONFIG["รอดำเนินการ"];
+    const step    = cfg.step;
+    const dotColor = {
+      pending: "#ff9800", process: "#2196f3",
+      waiting: "#9c27b0", outsource: "#ff5722", success: "#4caf50"
+    }[cfg.cls] || "#ccc";
+
+    // Progress bar 3 ขั้น
+    const stepsHtml = STEP_LABELS.map((label, i) => {
+      const idx = i + 1;
+      const cls = idx < step ? 'done' : idx === step ? 'active' : '';
+      return `
+        <div style="flex:1; text-align:center;">
+          <div class="step ${cls}"></div>
+          <div class="step-label">${label}</div>
+        </div>`;
+    }).join('');
+
+    // แปลงวันที่
+    const dt = job.timestamp
+      ? new Date(job.timestamp).toLocaleString('th-TH', {
+          day: '2-digit', month: 'short', year: '2-digit',
+          hour: '2-digit', minute: '2-digit'
+        })
+      : '-';
+
+    area.innerHTML += `
+      <div class="timeline-item">
+        <!-- dot -->
+        <div class="timeline-dot" style="background:${dotColor};">
+          <i class="fas ${cfg.icon}" style="font-size:0.65rem;"></i>
+        </div>
+
+        <!-- card -->
+        <div class="job-card ${cfg.cls}">
+          <!-- header row -->
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <span class="text-muted" style="font-size:0.75rem;">
+              <i class="fas fa-hashtag me-1"></i>${job.caseId}
+            </span>
+            <span class="status-pill ${cfg.pill}">${job.status}</span>
+          </div>
+
+          <!-- ประเภทงาน -->
+          <div class="fw-bold mb-1" style="font-size:1rem; color:#222;">
+            ${job.issue}
+          </div>
+
+          <!-- รายละเอียด -->
+          ${job.details && job.details !== '-'
+            ? `<div class="small text-muted mb-2" style="line-height:1.4;">
+                <i class="fas fa-comment-dots me-1"></i>${job.details.substring(0, 80)}${job.details.length > 80 ? '...' : ''}
+               </div>`
+            : ''}
+
+          <!-- Progress steps -->
+          <div class="progress-steps">${stepsHtml}</div>
+
+          <!-- วันที่ -->
+          <div class="mt-2 pt-2 border-top" style="font-size:0.72rem; color:#aaa;">
+            <i class="far fa-clock me-1"></i>แจ้งเมื่อ ${dt}
+          </div>
+        </div>
+      </div>`;
+  });
+}
+
+function renderEmpty() {
+  document.getElementById('timelineArea').innerHTML = `
+    <div class="empty-state">
+      <i class="fas fa-clipboard-check d-block"></i>
+      <p class="fw-bold text-dark">ยังไม่มีรายการแจ้งซ่อม</p>
+      <p class="small">กดปุ่ม "แจ้งซ่อม" เพื่อเริ่มต้นแจ้งปัญหาครับ</p>
+    </div>`;
+}
+
+function renderError(msg) {
+  document.getElementById('timelineArea').innerHTML = `
+    <div class="empty-state">
+      <i class="fas fa-circle-exclamation d-block text-danger"></i>
+      <p class="fw-bold text-danger">เกิดข้อผิดพลาด</p>
+      <p class="small text-muted">${msg}</p>
+    </div>`;
+}
+</script>
+</body>
+</html>
