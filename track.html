@@ -20,7 +20,7 @@
     .header-banner {
       background: linear-gradient(135deg, #1a237e 0%, #3949ab 100%);
       color: white;
-      padding: 40px 20px 75px;
+      padding: 40px 20px 30px;
       text-align: center;
       position: relative;
       overflow: hidden;
@@ -45,30 +45,7 @@
       color: white;
     }
 
-    /* ===== SUMMARY STRIP ===== */
-    .summary-wrap {
-      margin-top: -45px;
-      padding: 0 16px;
-      position: relative; z-index: 10;
-    }
-    .summary-card {
-      background: white;
-      border-radius: 18px;
-      padding: 14px 10px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
-    }
-    .badge-count {
-      border-radius: 14px;
-      padding: 10px 4px;
-      text-align: center;
-      font-size: 0.7rem;
-      font-weight: 600;
-    }
-    .badge-count .num {
-      font-size: 1.4rem;
-      font-weight: 700;
-      line-height: 1.1;
-    }
+
 
     /* ===== JOB CARD ===== */
     .timeline-wrap { padding: 12px 14px; }
@@ -210,44 +187,6 @@
   <p class="opacity-75 mb-0 small" id="headerSub">ติดตามความคืบหน้างานแจ้งซ่อมทั้งหมด</p>
 </div>
 
-<!-- Summary -->
-<div class="summary-wrap">
-  <div class="summary-card">
-    <div class="row g-1 text-center">
-      <div class="col">
-        <div class="badge-count" style="background:#fff3e0;">
-          <div class="num" style="color:#e65100;" id="cnt-pending">0</div>
-          <div style="color:#e65100;">รอฯ</div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="badge-count" style="background:#e3f2fd;">
-          <div class="num" style="color:#1565c0;" id="cnt-process">0</div>
-          <div style="color:#1565c0;">แก้ไข</div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="badge-count" style="background:#f3e5f5;">
-          <div class="num" style="color:#6a1b9a;" id="cnt-waiting">0</div>
-          <div style="color:#6a1b9a;">รออะไหล่</div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="badge-count" style="background:#fbe9e7;">
-          <div class="num" style="color:#bf360c;" id="cnt-outsource">0</div>
-          <div style="color:#bf360c;">ส่งนอก</div>
-        </div>
-      </div>
-      <div class="col">
-        <div class="badge-count" style="background:#e8f5e9;">
-          <div class="num" style="color:#2e7d32;" id="cnt-success">0</div>
-          <div style="color:#2e7d32;">เสร็จ</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- Timeline / Job Cards -->
 <div class="timeline-wrap mt-3" id="timelineArea"></div>
 
@@ -322,31 +261,12 @@ async function loadMyJobs(userId) {
       return;
     }
 
-    renderSummary(result.data);
     renderCards(result.data);
 
   } catch (err) {
     hideLoading();
     renderError("โหลดข้อมูลไม่สำเร็จ: " + err.toString());
   }
-}
-
-// ===== Summary =====
-function renderSummary(jobs) {
-  const c = { pending:0, process:0, waiting:0, outsource:0, success:0 };
-  jobs.forEach(j => {
-    const s = j.status;
-    if      (s === "รอดำเนินการ")          c.pending++;
-    else if (s === "กำลังแก้ไข")           c.process++;
-    else if (s === "รออะไหล่/ใบเสนอราคา") c.waiting++;
-    else if (s === "ส่งซ่อมภายนอก")        c.outsource++;
-    else if (s === "เสร็จสิ้น")            c.success++;
-  });
-  document.getElementById('cnt-pending').textContent   = c.pending;
-  document.getElementById('cnt-process').textContent   = c.process;
-  document.getElementById('cnt-waiting').textContent   = c.waiting;
-  document.getElementById('cnt-outsource').textContent = c.outsource;
-  document.getElementById('cnt-success').textContent   = c.success;
 }
 
 // ===== Premium Stepper HTML =====
