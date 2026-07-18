@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IT Service Dashboard — คณะสัตวแพทยศาสตร์ มช.</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:          #0d1117;
+      --surface:     #161b22;
+      --surface2:    #1c2333;
+      --border:      #30363d;
+      --text:        #e6edf3;
+      --muted:       #7d8590;
+      --accent:      #3b82f6;
+      --accent2:     #10b981;
+      --warn:        #f59e0b;
+      --danger:      #ef4444;
+      --purple:      #8b5cf6;
+      --orange:      #f97316;
+
+      --pending:     #f59e0b;
+      --process:     #3b82f6;
+      --waiting:     #8b5cf6;
+      --outsource:   #f97316;
+      --success:     #10b981;
+
+      --font-body:   'Sarabun', sans-serif;
+      --font-mono:   'IBM Plex Mono', monospace;
+      --r:           12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      min-height: 100vh;
+    }
+
+    /* ===== TOP NAV ===== */
+    .topnav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 1rem;
+    }
+    .nav-brand .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent2);
+      box-shadow: 0 0 8px var(--accent2);
+      animation: blink 2s ease infinite;
+    }
+    @keyframes blink {
+      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+    .nav-right {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .nav-time {
+      font-family: var(--font-mono);
+      font-size: 0.8rem; color: var(--muted);
+    }
+    .btn-refresh {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px; border-radius: 8px;
+      cursor: pointer; font-size: 0.82rem;
+      font-family: var(--font-body);
+      display: flex; align-items: center; gap: 6px;
+      transition: border-color 0.2s;
+    }
+    .btn-refresh:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ===== MAIN LAYOUT ===== */
+    .main { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+
+    /* ===== DATE FILTER ===== */
+    .filter-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 14px 20px;
+      display: flex; flex-wrap: wrap;
+      align-items: center; gap: 12px;
+      margin-bottom: 24px;
+    }
+    .filter-label {
+      font-size: 0.8rem; color: var(--muted);
+      font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .preset-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .preset-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 5px 14px; border-radius: 20px;
+      cursor: pointer; font-size: 0.8rem;
+      font-family: var(--font-body);
+      transition: all 0.2s;
+    }
+    .preset-btn.active,
+    .preset-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    .date-inputs {
+      display: flex; align-items: center; gap: 8px;
+      margin-left: auto;
+    }
+    .date-inputs input[type="date"] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 5px 10px; border-radius: 8px;
+      font-size: 0.82rem; font-family: var(--font-body);
+    }
+    .date-inputs input[type="date"]:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .btn-apply {
+      background: var(--accent);
+      border: none; color: white;
+      padding: 6px 16px; border-radius: 8px;
+      cursor: pointer; font-size: 0.82rem;
+      font-family: var(--font-body);
+    }
+
+    /* ===== KPI ROW ===== */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 20px 18px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--kpi-color, var(--accent));
+    }
+    .kpi-card:hover { border-color: var(--kpi-color, var(--accent)); }
+    .kpi-icon {
+      font-size: 1.1rem;
+      color: var(--kpi-color, var(--accent));
+      margin-bottom: 10px;
+    }
+    .kpi-num {
+      font-family: var(--font-mono);
+      font-size: 2rem; font-weight: 600;
+      line-height: 1;
+      color: var(--text);
+    }
+    .kpi-label {
+      font-size: 0.78rem; color: var(--muted);
+      margin-top: 5px;
+    }
+
+    /* ===== CHART GRID ===== */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 768px) {
+      .chart-grid { grid-template-columns: 1fr; }
+      .date-inputs { margin-left: 0; }
+    }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 20px;
+    }
+    .chart-card.full { grid-column: 1 / -1; }
+
+    .card-title {
+      font-size: 0.82rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin-bottom: 18px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-title i { color: var(--accent); }
+
+    /* ===== RATING DISPLAY ===== */
+    .rating-big {
+      text-align: center; padding: 10px 0;
+    }
+    .rating-score {
+      font-family: var(--font-mono);
+      font-size: 3.5rem; font-weight: 600;
+      color: var(--warn);
+      line-height: 1;
+    }
+    .rating-stars { color: var(--warn); font-size: 1.4rem; margin: 6px 0; }
+    .rating-sub { font-size: 0.8rem; color: var(--muted); }
+    .rating-bar-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 6px; font-size: 0.78rem;
+    }
+    .rating-bar-label { color: var(--muted); width: 40px; text-align: right; }
+    .rating-bar-track {
+      flex: 1; height: 6px;
+      background: var(--surface2);
+      border-radius: 3px; overflow: hidden;
+    }
+    .rating-bar-fill {
+      height: 100%; border-radius: 3px;
+      background: var(--warn);
+      transition: width 0.8s ease;
+    }
+    .rating-bar-count { color: var(--muted); width: 24px; }
+
+    /* ===== TOP DEPT TABLE ===== */
+    .dept-row {
+      display: flex; align-items: center;
+      gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .dept-row:last-child { border-bottom: none; }
+    .dept-rank {
+      font-family: var(--font-mono);
+      color: var(--muted); font-size: 0.75rem;
+      width: 20px;
+    }
+    .dept-name { flex: 1; }
+    .dept-bar-wrap { width: 80px; }
+    .dept-bar-bg {
+      height: 4px; background: var(--surface2);
+      border-radius: 2px; overflow: hidden;
+    }
+    .dept-bar-fg {
+      height: 100%; border-radius: 2px;
+      background: var(--accent);
+    }
+    .dept-count {
+      font-family: var(--font-mono);
+      font-size: 0.8rem; color: var(--accent);
+      width: 28px; text-align: right;
+    }
+
+    /* ===== RECENT TABLE ===== */
+    .recent-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .recent-table th {
+      text-align: left; padding: 8px 12px;
+      color: var(--muted); font-weight: 600;
+      font-size: 0.75rem; text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    .recent-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .recent-table tr:last-child td { border-bottom: none; }
+    .recent-table tr:hover td { background: var(--surface2); }
+
+    /* status pills */
+    .pill {
+      display: inline-block;
+      padding: 2px 10px; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 700;
+      white-space: nowrap;
+    }
+    .pill-pending   { background: rgba(245,158,11,0.15);  color: var(--pending); }
+    .pill-process   { background: rgba(59,130,246,0.15);  color: var(--process); }
+    .pill-waiting   { background: rgba(139,92,246,0.15);  color: var(--purple); }
+    .pill-outsource { background: rgba(249,115,22,0.15);  color: var(--outsource); }
+    .pill-success   { background: rgba(16,185,129,0.15);  color: var(--success); }
+
+    /* ===== LOADING / EMPTY ===== */
+    .loading-spinner {
+      text-align: center; padding: 40px;
+      color: var(--muted); font-size: 0.9rem;
+    }
+    .spinner { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ===== FOOTER ===== */
+    .dash-footer {
+      text-align: center; padding: 20px;
+      font-size: 0.75rem; color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="topnav">
+  <div class="nav-brand">
+    <div class="dot"></div>
+    <span>IT Service Dashboard</span>
+    <span style="color:var(--muted);font-weight:400;font-size:0.8rem;">— คณะสัตวแพทยศาสตร์ มช.</span>
+  </div>
+  <div class="nav-right">
+    <span class="nav-time" id="clockDisplay"></span>
+    <button class="btn-refresh" onclick="loadData()">
+      <i class="fas fa-rotate-right" id="refreshIcon"></i> รีเฟรช
+    </button>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- DATE FILTER -->
+  <div class="filter-bar">
+    <span class="filter-label"><i class="fas fa-calendar-days me-1"></i>ช่วงเวลา</span>
+    <div class="preset-btns">
+      <button class="preset-btn" onclick="setPreset(7,this)">7 วัน</button>
+      <button class="preset-btn active" onclick="setPreset(30,this)">30 วัน</button>
+      <button class="preset-btn" onclick="setPreset(90,this)">90 วัน</button>
+      <button class="preset-btn" onclick="setPreset(0,this)">ทั้งหมด</button>
+    </div>
+    <div class="date-inputs">
+      <input type="date" id="dateFrom" title="ตั้งแต่วันที่">
+      <span style="color:var(--muted);font-size:0.8rem;">ถึง</span>
+      <input type="date" id="dateTo" title="ถึงวันที่">
+      <button class="btn-apply" onclick="applyCustomRange()">ดูข้อมูล</button>
+    </div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div class="kpi-grid" id="kpiRow">
+    <div class="kpi-card" style="--kpi-color:var(--text)">
+      <div class="kpi-icon"><i class="fas fa-layer-group"></i></div>
+      <div class="kpi-num" id="kpi-total">—</div>
+      <div class="kpi-label">งานทั้งหมด</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--pending)">
+      <div class="kpi-icon"><i class="fas fa-clock"></i></div>
+      <div class="kpi-num" id="kpi-pending">—</div>
+      <div class="kpi-label">รอดำเนินการ</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--process)">
+      <div class="kpi-icon"><i class="fas fa-screwdriver-wrench"></i></div>
+      <div class="kpi-num" id="kpi-process">—</div>
+      <div class="kpi-label">กำลังแก้ไข</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--purple)">
+      <div class="kpi-icon"><i class="fas fa-box-open"></i></div>
+      <div class="kpi-num" id="kpi-waiting">—</div>
+      <div class="kpi-label">รออะไหล่</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--outsource)">
+      <div class="kpi-icon"><i class="fas fa-truck"></i></div>
+      <div class="kpi-num" id="kpi-outsource">—</div>
+      <div class="kpi-label">ส่งซ่อมภายนอก</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--success)">
+      <div class="kpi-icon"><i class="fas fa-circle-check"></i></div>
+      <div class="kpi-num" id="kpi-success">—</div>
+      <div class="kpi-label">เสร็จสิ้น</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color:var(--warn)">
+      <div class="kpi-icon"><i class="fas fa-star"></i></div>
+      <div class="kpi-num" id="kpi-rating">—</div>
+      <div class="kpi-label">คะแนนเฉลี่ย / 5</div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 1 -->
+  <div class="chart-grid">
+
+    <!-- งานรายวัน (Line chart) -->
+    <div class="chart-card full">
+      <div class="card-title"><i class="fas fa-chart-line"></i>จำนวนงานแจ้งซ่อมรายวัน</div>
+      <canvas id="chartDaily" height="90"></canvas>
+    </div>
+
+    <!-- สัดส่วนสถานะ (Doughnut) -->
+    <div class="chart-card">
+      <div class="card-title"><i class="fas fa-chart-pie"></i>สัดส่วนสถานะงาน</div>
+      <canvas id="chartStatus" height="200"></canvas>
+    </div>
+
+    <!-- ประเภทปัญหา (Bar) -->
+    <div class="chart-card">
+      <div class="card-title"><i class="fas fa-chart-bar"></i>ประเภทงานที่แจ้งมากสุด</div>
+      <canvas id="chartIssue" height="200"></canvas>
+    </div>
+
+    <!-- หน่วยงาน Top -->
+    <div class="chart-card">
+      <div class="card-title"><i class="fas fa-building"></i>หน่วยงานที่แจ้งซ่อมบ่อยที่สุด</div>
+      <div id="deptList"><div class="loading-spinner"><i class="fas fa-circle-notch spinner"></i></div></div>
+    </div>
+
+    <!-- Rating -->
+    <div class="chart-card">
+      <div class="card-title"><i class="fas fa-star"></i>ความพึงพอใจในการให้บริการ</div>
+      <div class="rating-big">
+        <div class="rating-score" id="ratingScore">—</div>
+        <div class="rating-stars" id="ratingStars">☆☆☆☆☆</div>
+        <div class="rating-sub" id="ratingSub">ยังไม่มีข้อมูล</div>
+      </div>
+      <div style="margin-top:16px;" id="ratingBars"></div>
+    </div>
+
+  </div>
+
+  <!-- RECENT JOBS -->
+  <div class="chart-card" style="margin-bottom:24px;">
+    <div class="card-title"><i class="fas fa-list"></i>รายการล่าสุด 20 รายการ</div>
+    <div style="overflow-x:auto;">
+      <table class="recent-table">
+        <thead>
+          <tr>
+            <th>Case ID</th>
+            <th>วันที่แจ้ง</th>
+            <th>ผู้แจ้ง</th>
+            <th>หน่วยงาน</th>
+            <th>ประเภท</th>
+            <th>ความเร่งด่วน</th>
+            <th>สถานะ</th>
+            <th>คะแนน</th>
+          </tr>
+        </thead>
+        <tbody id="recentTable">
+          <tr><td colspan="8" class="loading-spinner"><i class="fas fa-circle-notch spinner"></i> กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="dash-footer" id="lastUpdate">— กำลังโหลดข้อมูล —</div>
+
+<script>
+// ==========================================
+// CONFIG
+// ==========================================
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzN4P_XoL886K02oVdlVO7F3uwo5KCjRE-H4tyzxeQJU9hnuY-t5X2S-yP50klO0dCSdw/exec";
+
+let allData     = [];
+let dateFrom    = null;
+let dateTo      = null;
+let activeDays  = 30;
+let chartDaily  = null;
+let chartStatus = null;
+let chartIssue  = null;
+
+// Chart.js dark defaults
+Chart.defaults.color          = '#7d8590';
+Chart.defaults.borderColor    = '#30363d';
+Chart.defaults.font.family    = "'Sarabun', sans-serif";
+
+// ==========================================
+// CLOCK
+// ==========================================
+function updateClock() {
+  document.getElementById('clockDisplay').textContent =
+    new Date().toLocaleString('th-TH', {
+      weekday:'short', day:'2-digit', month:'short',
+      hour:'2-digit', minute:'2-digit', second:'2-digit'
+    });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ==========================================
+// DATE FILTER
+// ==========================================
+function setPreset(days, btn) {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeDays = days;
+  const now  = new Date();
+  dateTo     = new Date(now);
+  dateFrom   = days === 0 ? null : new Date(now - days * 86400000);
+  document.getElementById('dateFrom').value = dateFrom ? dateFrom.toISOString().split('T')[0] : '';
+  document.getElementById('dateTo').value   = dateTo.toISOString().split('T')[0];
+  renderAll();
+}
+
+function applyCustomRange() {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  activeDays = -1;
+  const f = document.getElementById('dateFrom').value;
+  const t = document.getElementById('dateTo').value;
+  dateFrom  = f ? new Date(f) : null;
+  dateTo    = t ? new Date(t + 'T23:59:59') : new Date();
+  renderAll();
+}
+
+function filterData(data) {
+  if (!dateFrom && !dateTo) return data;
+  return data.filter(row => {
+    if (!row[0]) return false;
+    const d = new Date(row[0]);
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo   && d > dateTo)   return false;
+    return true;
+  });
+}
+
+// ==========================================
+// LOAD DATA FROM APPS SCRIPT
+// ==========================================
+async function loadData() {
+  const icon = document.getElementById('refreshIcon');
+  icon.classList.add('fa-spin');
+  try {
+    const res    = await fetch(APPS_SCRIPT_URL + "?action=getDashboardData", { redirect: "follow" });
+    const result = await res.json();
+    if (result.status === "success") {
+      allData = result.data;
+      renderAll();
+      document.getElementById('lastUpdate').textContent =
+        "อัปเดตล่าสุด: " + new Date().toLocaleString('th-TH');
+    }
+  } catch (err) {
+    console.error(err);
+    document.getElementById('lastUpdate').textContent = "❌ โหลดข้อมูลไม่สำเร็จ — " + err.message;
+  }
+  icon.classList.remove('fa-spin');
+}
+
+// ==========================================
+// RENDER ALL
+// ==========================================
+function renderAll() {
+  const data = filterData(allData);
+  renderKPI(data);
+  renderDailyChart(data);
+  renderStatusChart(data);
+  renderIssueChart(data);
+  renderDeptList(data);
+  renderRating(data);
+  renderRecent(data);
+}
+
+// ==========================================
+// KPI
+// ==========================================
+function renderKPI(data) {
+  const counts = { pending:0, process:0, waiting:0, outsource:0, success:0 };
+  data.forEach(r => {
+    const s = (r[8] || "รอดำเนินการ").toString();
+    if      (s === "รอดำเนินการ")          counts.pending++;
+    else if (s === "กำลังแก้ไข")           counts.process++;
+    else if (s === "รออะไหล่/ใบเสนอราคา") counts.waiting++;
+    else if (s === "ส่งซ่อมภายนอก")        counts.outsource++;
+    else if (s === "เสร็จสิ้น")            counts.success++;
+  });
+  const total = data.length;
+  const ratings = data.map(r => parseFloat(r[11])).filter(n => !isNaN(n) && n > 0);
+  const avgRating = ratings.length ? (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1) : "—";
+
+  document.getElementById('kpi-total').textContent    = total;
+  document.getElementById('kpi-pending').textContent  = counts.pending;
+  document.getElementById('kpi-process').textContent  = counts.process;
+  document.getElementById('kpi-waiting').textContent  = counts.waiting;
+  document.getElementById('kpi-outsource').textContent= counts.outsource;
+  document.getElementById('kpi-success').textContent  = counts.success;
+  document.getElementById('kpi-rating').textContent   = avgRating;
+}
+
+// ==========================================
+// DAILY LINE CHART
+// ==========================================
+function renderDailyChart(data) {
+  // นับงานต่อวัน
+  const dayMap = {};
+  data.forEach(r => {
+    if (!r[0]) return;
+    const d = new Date(r[0]).toISOString().split('T')[0];
+    dayMap[d] = (dayMap[d] || 0) + 1;
+  });
+  const labels = Object.keys(dayMap).sort();
+  const values = labels.map(d => dayMap[d]);
+
+  if (chartDaily) chartDaily.destroy();
+  const ctx = document.getElementById('chartDaily').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 200);
+  grad.addColorStop(0, 'rgba(59,130,246,0.3)');
+  grad.addColorStop(1, 'rgba(59,130,246,0)');
+
+  chartDaily = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels.map(d => new Date(d).toLocaleDateString('th-TH',{day:'2-digit',month:'short'})),
+      datasets: [{
+        data: values,
+        borderColor: '#3b82f6',
+        backgroundColor: grad,
+        borderWidth: 2,
+        pointRadius: labels.length < 30 ? 4 : 2,
+        pointBackgroundColor: '#3b82f6',
+        fill: true,
+        tension: 0.4
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#30363d' } },
+        y: { grid: { color: '#30363d' }, beginAtZero: true, ticks: { stepSize: 1 } }
+      }
+    }
+  });
+}
+
+// ==========================================
+// STATUS DOUGHNUT
+// ==========================================
+function renderStatusChart(data) {
+  const counts = [0,0,0,0,0];
+  const labels = ["รอดำเนินการ","กำลังแก้ไข","รออะไหล่/ใบเสนอราคา","ส่งซ่อมภายนอก","เสร็จสิ้น"];
+  const colors = ["#f59e0b","#3b82f6","#8b5cf6","#f97316","#10b981"];
+
+  data.forEach(r => {
+    const s = (r[8] || "รอดำเนินการ").toString();
+    const i = labels.indexOf(s);
+    if (i >= 0) counts[i]++;
+  });
+
+  if (chartStatus) chartStatus.destroy();
+  chartStatus = new Chart(document.getElementById('chartStatus'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }] },
+    options: {
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'bottom', labels: { padding: 14, font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ==========================================
+// ISSUE TYPE BAR
+// ==========================================
+function renderIssueChart(data) {
+  const map = {};
+  data.forEach(r => {
+    const issue = (r[4] || "อื่นๆ").toString();
+    map[issue]  = (map[issue] || 0) + 1;
+  });
+  const sorted  = Object.entries(map).sort((a,b) => b[1]-a[1]).slice(0, 7);
+  const labels  = sorted.map(([k]) => k.length > 20 ? k.substring(0,18)+'…' : k);
+  const values  = sorted.map(([,v]) => v);
+
+  if (chartIssue) chartIssue.destroy();
+  chartIssue = new Chart(document.getElementById('chartIssue'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data: values, backgroundColor: '#3b82f620', borderColor: '#3b82f6', borderWidth: 1.5, borderRadius: 6 }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#30363d' }, beginAtZero: true, ticks: { stepSize: 1 } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ==========================================
+// DEPT TOP LIST
+// ==========================================
+function renderDeptList(data) {
+  const map = {};
+  data.forEach(r => {
+    const d = (r[3] || "ไม่ระบุ").toString();
+    map[d]  = (map[d] || 0) + 1;
+  });
+  const sorted = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const max    = sorted[0]?.[1] || 1;
+  const el     = document.getElementById('deptList');
+
+  if (!sorted.length) { el.innerHTML = '<div class="loading-spinner">ไม่มีข้อมูล</div>'; return; }
+
+  el.innerHTML = sorted.map(([name, count], i) => `
+    <div class="dept-row">
+      <span class="dept-rank">${String(i+1).padStart(2,'0')}</span>
+      <span class="dept-name">${name.length > 30 ? name.substring(0,28)+'…' : name}</span>
+      <div class="dept-bar-wrap">
+        <div class="dept-bar-bg">
+          <div class="dept-bar-fg" style="width:${(count/max*100).toFixed(0)}%"></div>
+        </div>
+      </div>
+      <span class="dept-count">${count}</span>
+    </div>`).join('');
+}
+
+// ==========================================
+// RATING
+// ==========================================
+function renderRating(data) {
+  const allRatings = data.map(r => parseInt(r[11])).filter(n => n >= 1 && n <= 5);
+  if (!allRatings.length) {
+    document.getElementById('ratingScore').textContent = '—';
+    document.getElementById('ratingStars').textContent = '☆☆☆☆☆';
+    document.getElementById('ratingSub').textContent   = 'ยังไม่มีข้อมูลการประเมิน';
+    document.getElementById('ratingBars').innerHTML    = '';
+    return;
+  }
+
+  const avg   = allRatings.reduce((a,b)=>a+b,0) / allRatings.length;
+  const full  = Math.round(avg);
+  const stars = '★'.repeat(full) + '☆'.repeat(5-full);
+
+  document.getElementById('ratingScore').textContent = avg.toFixed(1);
+  document.getElementById('ratingStars').textContent = stars;
+  document.getElementById('ratingSub').textContent   = `จากการประเมิน ${allRatings.length} ครั้ง`;
+
+  // bar per star
+  const bars = document.getElementById('ratingBars');
+  bars.innerHTML = [5,4,3,2,1].map(star => {
+    const cnt = allRatings.filter(r=>r===star).length;
+    const pct = allRatings.length ? (cnt/allRatings.length*100).toFixed(0) : 0;
+    return `
+      <div class="rating-bar-row">
+        <span class="rating-bar-label">${star} ★</span>
+        <div class="rating-bar-track">
+          <div class="rating-bar-fill" style="width:${pct}%"></div>
+        </div>
+        <span class="rating-bar-count">${cnt}</span>
+      </div>`;
+  }).join('');
+}
+
+// ==========================================
+// RECENT TABLE
+// ==========================================
+function renderRecent(data) {
+  const sorted = [...data].sort((a,b)=>new Date(b[0])-new Date(a[0])).slice(0,20);
+  const STATUS_PILL = {
+    "รอดำเนินการ":           "pill-pending",
+    "กำลังแก้ไข":            "pill-process",
+    "รออะไหล่/ใบเสนอราคา":  "pill-waiting",
+    "ส่งซ่อมภายนอก":         "pill-outsource",
+    "เสร็จสิ้น":             "pill-success"
+  };
+  const PRIORITY_COLOR = { "ด่วนมาก":"#ef4444","ด่วน":"#f59e0b","ปกติ":"#7d8590" };
+
+  const tbody = document.getElementById('recentTable');
+  if (!sorted.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px;">ไม่มีข้อมูลในช่วงเวลานี้</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sorted.map(r => {
+    const dt     = r[0] ? new Date(r[0]).toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'2-digit'}) : '-';
+    const status = (r[8] || "รอดำเนินการ").toString();
+    const pill   = STATUS_PILL[status] || 'pill-pending';
+    const pColor = PRIORITY_COLOR[r[5]] || '#7d8590';
+    const rating = r[11] ? '★'.repeat(parseInt(r[11])) : '—';
+    const rColor = r[11] ? '#f59e0b' : '#7d8590';
+    return `
+      <tr>
+        <td style="font-family:var(--font-mono);font-size:0.78rem;color:var(--accent)">${r[1]||'-'}</td>
+        <td style="color:var(--muted)">${dt}</td>
+        <td>${r[2]||'-'}</td>
+        <td style="color:var(--muted);font-size:0.78rem;">${(r[3]||'-').length>18?(r[3]||'-').substring(0,16)+'…':r[3]||'-'}</td>
+        <td>${r[4]||'-'}</td>
+        <td style="color:${pColor};font-weight:600;">${r[5]||'-'}</td>
+        <td><span class="pill ${pill}">${status}</span></td>
+        <td style="color:${rColor};font-size:0.8rem;">${rating}</td>
+      </tr>`;
+  }).join('');
+}
+
+// ==========================================
+// INIT — ตั้งค่าวันที่เริ่มต้น 30 วัน
+// ==========================================
+(function init() {
+  const now = new Date();
+  dateTo    = new Date(now);
+  dateFrom  = new Date(now - 30 * 86400000);
+  document.getElementById('dateTo').value   = now.toISOString().split('T')[0];
+  document.getElementById('dateFrom').value = dateFrom.toISOString().split('T')[0];
+  loadData();
+  setInterval(loadData, 5 * 60 * 1000); // auto-refresh ทุก 5 นาที
+})();
+</script>
+</body>
+</html>
